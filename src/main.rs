@@ -1,7 +1,6 @@
-//! VeriWipe - Integrated Secure Data Erasure & Advanced Forensic Recovery Platform
-//! SIH 2026 Problem Statement ID: 26149 (NTRO)
-
-pub mod config;
+use veriwipe::blockchain::*;
+use veriwipe::config::*;
+use veriwipe::config;
 
 use clap::{Parser, Subcommand};
 use tracing::{info, Level};
@@ -166,7 +165,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
         Some(Commands::Blockchain { action }) => {
-            info!("Blockchain action: {}", action);
+            let paths = RuntimePaths::get();
+            let authority = KeyAuthority::load_or_generate(&paths.authority_privkey, &paths.authority_pubkey)
+                .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
+            let ledger = BlockchainLedger::load_or_create(&paths.ledger_file, &authority)
+                .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
+
+            if action == "verify" {
+                let res = ledger.verify_chain();
+                if res.is_valid {
+                    println!("╔════════════════════════════════════════════════════════════════╗");
+                    println!("║  VERIWIPE BLOCKCHAIN AUDIT LEDGER: CRYPTOGRAPHICALLY VALID ✅  ║");
+                    println!("╠════════════════════════════════════════════════════════════════╣");
+                    println!("║ Total Blocks Verified : {:<38} ║", res.total_blocks);
+                    println!("║ Signature Algorithm   : Ed25519 (RFC 8032)                     ║");
+                    println!("║ Hash Specification    : SHA-256 (FIPS 180-4)                   ║");
+                    println!("║ Authority Public Key  : {}... ║", &authority.public_key_hex()[..24]);
+                    println!("╚════════════════════════════════════════════════════════════════╝");
+                } else {
+                    println!("❌ BLOCKCHAIN AUDIT CHAIN TAMPERED OR INVALID!");
+                    println!("Discrepancy Details: {:?}", res.error_message);
+                    println!("Invalid Block Index: {:?}", res.invalid_block_index);
+                }
+            } else if action == "dump" || action == "show" {
+                println!("{}", serde_json::to_string_pretty(&ledger.blocks)?);
+            } else {
+                println!("Unknown blockchain action: {}. Supported: verify, show", action);
+            }
         }
         Some(Commands::Tui) => {
             info!("Launching VeriWipe Bare-Metal TUI...");
