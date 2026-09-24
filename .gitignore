@@ -1,0 +1,34 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.env/
+env/
+.venv/
+
+# Node & Frontend builds
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Temporary forensic test artifacts & images
+*.img
+*.raw
+*.iso
+/tmp/veriwipe_*
+test_artifacts/
+logs/
+*.log
+.DS_Store
+
+# Certificates and keys generated at runtime
+*.pem
+veriwipe_records/
+
+
+# Added by cargo
+
+/target
