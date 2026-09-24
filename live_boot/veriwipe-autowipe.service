@@ -1,0 +1,16 @@
+[Unit]
+Description=VeriWipe Autonomous One-Shot Decommissioning Appliance
+After=network.target local-fs.target
+ConditionKernelCommandLine=veriwipe.autonuke=1
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/veriwipe autonuke --autonomous
+StandardInput=tty-force
+StandardOutput=inherit
+StandardError=inherit
+TTYPath=/dev/tty1
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
