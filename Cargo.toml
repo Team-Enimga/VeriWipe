@@ -24,3 +24,5 @@ uuid = { version = "1.8", features = ["v4", "serde"] }
 walkdir = "2.5"
 sysinfo = "0.30"
 libc = "0.2"
+async-stream = "0.3"
+futures-util = "0.3"

@@ -3,7 +3,7 @@ use veriwipe::config::*;
 use veriwipe::config;
 
 use clap::{Parser, Subcommand};
-use tracing::{info, Level};
+use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
 #[derive(Parser)]
@@ -134,12 +134,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match cli.command {
         Some(Commands::Serve { host, port }) => {
-            info!("Starting VeriWipe Embedded Web Server on http://{}:{}...", host, port);
             println!("\n╔════════════════════════════════════════════════════════════════╗");
             println!("║  VERIWIPE: INTEGRATED SECURE DATA ERASURE & DIGITAL FORENSICS  ║");
             println!("║  SIH 2026 Problem Statement ID: 26149 (NTRO)                   ║");
             println!("║  Web GUI running at: http://{}:{}                     ║", host, port);
             println!("╚════════════════════════════════════════════════════════════════╝\n");
+            veriwipe::web::start_server(Some(&host), Some(port)).await?;
         }
         Some(Commands::Devices { include_virtual }) => {
             let devices = veriwipe::devices::list_block_devices(include_virtual);
@@ -301,7 +301,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Some(Commands::Autonuke { autonomous, dry_run }) => {
-            info!("VeriWipe Autonuke initialized (autonomous={}, dry_run={})", autonomous, dry_run);
+            veriwipe::autonomous::run_autonuke(autonomous, dry_run, 15)
+                .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
+        }
+        Some(Commands::Tui) => {
+            veriwipe::autonomous::run_tui()?;
         }
         Some(Commands::Lab { action }) => {
             let paths = RuntimePaths::get();
@@ -371,9 +375,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 println!("Unknown blockchain action: {}. Supported: verify, show", action);
             }
-        }
-        Some(Commands::Tui) => {
-            info!("Launching VeriWipe Bare-Metal TUI...");
         }
         None => {
             println!("VeriWipe v{} - {}", config::PRODUCT_VERSION, config::PROBLEM_STATEMENT);

@@ -10,7 +10,6 @@ use crate::sanitizer::drive::{execute_wipe, WipeExecutionResult};
 use std::io::{stdout, Write};
 use std::thread::sleep;
 use std::time::Duration;
-use tracing::info;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AutonukeSessionReport {

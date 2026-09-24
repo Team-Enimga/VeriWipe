@@ -6,3 +6,4 @@ pub mod config;
 pub mod devices;
 pub mod recovery;
 pub mod sanitizer;
+pub mod web;
