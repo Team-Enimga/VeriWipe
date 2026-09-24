@@ -141,8 +141,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("║  Web GUI running at: http://{}:{}                     ║", host, port);
             println!("╚════════════════════════════════════════════════════════════════╝\n");
         }
-        Some(Commands::Devices { .. }) => {
-            info!("Enumerating storage devices...");
+        Some(Commands::Devices { include_virtual }) => {
+            let devices = veriwipe::devices::list_block_devices(include_virtual);
+            println!("\n╔════════════════════════════════════════════════════════════════════════════════════════════════════════════╗");
+            println!("║                        VERIWIPE STORAGE DEVICE DISCOVERY & SAFETY ENUMERATION                              ║");
+            println!("╠══════════╦════════════════╦═════════╦══════════════╦════════════════════════════════╦══════════╦═══════════════╣");
+            println!("║ DEV NODE ║ BUS TYPE       ║ SIZE    ║ ROTATIONAL   ║ MODEL                          ║ STATUS   ║ PROTECTION    ║");
+            println!("╠══════════╬════════════════╬═════════╬══════════════╬════════════════════════════════╬══════════╬═══════════════╣");
+            for dev in &devices {
+                let status = if dev.is_protected { "LOCKED 🔒" } else { "READY  ✅" };
+                let prot_desc = if dev.is_protected {
+                    dev.protection_reason.clone().unwrap_or_else(|| "System protected".to_string())
+                } else {
+                    "Safe Target".to_string()
+                };
+                let prot_short = if prot_desc.len() > 13 { &prot_desc[..13] } else { &prot_desc };
+                let model_short = if dev.model.len() > 30 { &dev.model[..30] } else { &dev.model };
+                let rota_str = if dev.is_rotational { "HDD (Rot)" } else { "SSD/Flash" };
+
+                println!(
+                    "║ {:<8} ║ {:<14} ║ {:>5.1} GB ║ {:<12} ║ {:<30} ║ {:<8} ║ {:<13} ║",
+                    dev.name, dev.bus_type, dev.size_gb, rota_str, model_short, status, prot_short
+                );
+            }
+            println!("╚══════════╩════════════════╩═════════╩══════════════╩════════════════════════════════╩══════════╩═══════════════╝\n");
         }
         Some(Commands::Wipe { target, method, .. }) => {
             info!("Preparing wipe for target: {} with method: {}", target, method);
@@ -153,17 +175,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(Commands::Autonuke { autonomous, dry_run }) => {
             info!("VeriWipe Autonuke initialized (autonomous={}, dry_run={})", autonomous, dry_run);
         }
-        Some(Commands::Lab { action }) => match action {
-            LabAction::Create { size_mb, name } => {
-                info!("Creating {}MB test drive: {}", size_mb, name);
+        Some(Commands::Lab { action }) => {
+            let paths = RuntimePaths::get();
+            match action {
+                LabAction::Create { size_mb, name } => {
+                    println!("🔧 Generating Synthetic Forensic Test Drive ({} MB)...", size_mb);
+                    match veriwipe::devices::create_synthetic_disk(&paths.lab_dir, &name, size_mb) {
+                        Ok(manifest) => {
+                            println!("✅ Virtual Forensic Test Disk created at: {}", manifest.image_path);
+                            println!("Size: {} MB ({} bytes)", manifest.size_mb, manifest.size_bytes);
+                            println!("\nInjected Ground Truth Artifacts for SIH Judging Validation:");
+                            for (i, art) in manifest.artifacts.iter().enumerate() {
+                                println!(
+                                    "  [{}] {:<22} | Format: {:<10} | Offset: 0x{:08X} ({:<7} B) | SHA256: {}...",
+                                    i + 1, art.name, art.format, art.offset_bytes, art.length_bytes, &art.sha256_hash[..16]
+                                );
+                            }
+                            println!("\n💡 You can now carve or wipe this image without touching any physical drives:");
+                            println!("   veriwipe carve --source {}", manifest.image_path);
+                            println!("   veriwipe wipe --target {} --method NIST_800_88_PURGE\n", manifest.image_path);
+                        }
+                        Err(e) => eprintln!("❌ Failed to create synthetic test drive: {}", e),
+                    }
+                }
+                LabAction::List => {
+                    let disks = veriwipe::devices::list_synthetic_disks(&paths.lab_dir);
+                    if disks.is_empty() {
+                        println!("No synthetic forensic disks found in {}. Run `veriwipe lab create` to generate one.", paths.lab_dir.display());
+                    } else {
+                        println!("Found {} synthetic forensic test drives:", disks.len());
+                        for d in disks {
+                            println!(" • {} ({} MB) - {} artifacts", d.image_path, d.size_mb, d.artifacts.len());
+                        }
+                    }
+                }
+                LabAction::Clean => match veriwipe::devices::cleanup_synthetic_disks(&paths.lab_dir) {
+                    Ok(count) => println!("🧹 Cleaned up {} synthetic forensic test files.", count),
+                    Err(e) => eprintln!("❌ Clean error: {}", e),
+                },
             }
-            LabAction::List => {
-                info!("Listing virtual lab images...");
-            }
-            LabAction::Clean => {
-                info!("Cleaning virtual lab images...");
-            }
-        },
+        }
         Some(Commands::Blockchain { action }) => {
             let paths = RuntimePaths::get();
             let authority = KeyAuthority::load_or_generate(&paths.authority_privkey, &paths.authority_pubkey)
