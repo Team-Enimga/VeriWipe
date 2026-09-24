@@ -166,11 +166,139 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             println!("╚══════════╩════════════════╩═════════╩══════════════╩════════════════════════════════╩══════════╩═══════════════╝\n");
         }
-        Some(Commands::Wipe { target, method, .. }) => {
-            info!("Preparing wipe for target: {} with method: {}", target, method);
+        Some(Commands::Wipe { target, method, verify, operator, force }) => {
+            let wipe_method = match method.to_uppercase().as_str() {
+                "NIST_800_88_CLEAR" => WipeMethod::Nist800_88Clear,
+                "NIST_800_88_PURGE" => WipeMethod::Nist800_88Purge,
+                "DOD_5220_22_M" => WipeMethod::Dod5220_22M,
+                "ZERO_QUICK" => WipeMethod::ZeroQuick,
+                _ => {
+                    eprintln!("Unknown wipe method: {}. Defaulting to NIST_800_88_PURGE", method);
+                    WipeMethod::Nist800_88Purge
+                }
+            };
+
+            let target_path = std::path::Path::new(&target);
+            if !target_path.exists() {
+                eprintln!("❌ Target does not exist: {}", target);
+                return Ok(());
+            }
+
+            println!("\n╔════════════════════════════════════════════════════════════════╗");
+            println!("║          VERIWIPE CERTIFIED MEDIA SANITIZATION ENGINE          ║");
+            println!("╠════════════════════════════════════════════════════════════════╣");
+            println!("║ Target Device/Image   : {:<38} ║", target);
+            println!("║ Standard Applied      : {:<38} ║", wipe_method.display_name());
+            println!("║ Execution Passes      : {:<38} ║", wipe_method.pass_count());
+            println!("║ Verification Scope    : {:<38} ║", format!("{}% Sector Sampling", verify));
+            println!("║ Certified Operator    : {:<38} ║", operator);
+            println!("╚════════════════════════════════════════════════════════════════╝\n");
+
+            if !force {
+                print!("⚠️  Type 'YES' to confirm irreversible data destruction: ");
+                use std::io::{stdin, stdout, Write};
+                stdout().flush()?;
+                let mut input = String::new();
+                stdin().read_line(&mut input)?;
+                if input.trim() != "YES" {
+                    println!("Sanitization cancelled by operator.");
+                    return Ok(());
+                }
+            }
+
+            if target_path.is_dir() {
+                println!("Sanitizing directory contents recursively with DoD 3-pass shredder...");
+                match veriwipe::sanitizer::shred_path(&target, &operator) {
+                    Ok(res) => {
+                        println!("✅ Shredded {} files ({} bytes)", res.files_shredded, res.bytes_overwritten);
+                        println!("Blockchain Block Hash: {}", res.blockchain_block_hash);
+                    }
+                    Err(e) => eprintln!("❌ Shred error: {}", e),
+                }
+            } else {
+                let progress_cb = Box::new(|pass, total_passes, written, total, throughput| {
+                    let pct = (written as f64 / total as f64) * 100.0;
+                    print!(
+                        "\r[Pass {}/{}] Progress: {:>5.1}% ({}/{} MB) @ {:>6.1} MB/s",
+                        pass, total_passes, pct, written / (1024 * 1024), total / (1024 * 1024), throughput
+                    );
+                    use std::io::Write;
+                    let _ = std::io::stdout().flush();
+                });
+
+                match veriwipe::sanitizer::execute_wipe(
+                    &target,
+                    wipe_method,
+                    verify,
+                    &operator,
+                    "National Technical Research Organisation (NTRO)",
+                    Some(progress_cb),
+                ) {
+                    Ok(res) => {
+                        println!("\n\n╔════════════════════════════════════════════════════════════════════════════════════════╗");
+                        println!("║               SANITIZATION COMPLETED & CERTIFIED ON BLOCKCHAIN ✅                      ║");
+                        println!("╠════════════════════════════════════════════════════════════════════════════════════════╣");
+                        println!("║ Target Media          : {:<62} ║", res.target);
+                        println!("║ Capacity Sanitized    : {:>8.2} MB ({:<10} B)                                ║", (res.total_bytes as f64) / (1024.0 * 1024.0), res.total_bytes);
+                        println!("║ Duration & Speed      : {:>5.2}s @ {:>6.2} MB/s                                          ║", res.duration_seconds, res.throughput_mbps);
+                        println!("║ Read-Back Verification: {:<62} ║", res.verification.details);
+                        println!("║ Post-Wipe Sector Hash : {}... ║", &res.verification.post_wipe_hash[..32]);
+                        println!("║ Blockchain Block Hash : {}... ║", &res.blockchain_block_hash[..32]);
+                        println!("║ Certificate (JSON)    : {:<62} ║", res.certificate_json_path);
+                        println!("║ Certificate (HTML)    : {:<62} ║", res.certificate_html_path);
+                        println!("╚════════════════════════════════════════════════════════════════════════════════════════╝\n");
+                    }
+                    Err(e) => eprintln!("\n❌ Sanitization Error: {}", e),
+                }
+            }
         }
-        Some(Commands::Carve { source, output, .. }) => {
-            info!("Starting forensic file carving on {} -> {}", source, output);
+        Some(Commands::Carve { source, output, format }) => {
+            println!("\n╔════════════════════════════════════════════════════════════════╗");
+            println!("║          VERIWIPE ADVANCED FORENSIC FILE CARVER                ║");
+            println!("╠════════════════════════════════════════════════════════════════╣");
+            println!("║ Source Media          : {:<38} ║", source);
+            println!("║ Output Directory      : {:<38} ║", output);
+            println!("║ Format Filter         : {:<38} ║", format);
+            println!("║ Pipeline Stages       : Magic Bytes -> Structure Parser -> Provenance║");
+            println!("╚════════════════════════════════════════════════════════════════╝\n");
+
+            let source_path = std::path::Path::new(&source);
+            let output_path = std::path::Path::new(&output);
+
+            let progress_cb = Box::new(|scanned, total, count| {
+                let pct = (scanned as f64 / total as f64) * 100.0;
+                print!(
+                    "\r[Carving] Scanned: {:>5.1}% ({}/{} MB) | Artifacts Found: {}",
+                    pct, scanned / (1024 * 1024), total / (1024 * 1024), count
+                );
+                use std::io::Write;
+                let _ = std::io::stdout().flush();
+            });
+
+            match veriwipe::recovery::carve_media(source_path, output_path, &format, true, Some(progress_cb)) {
+                Ok(res) => {
+                    println!("\n\n╔════════════════════════════════════════════════════════════════════════════════════════╗");
+                    println!("║             FORENSIC CARVING COMPLETED & EVIDENCE ANCHORED ON CHAIN ✅                 ║");
+                    println!("╠════════════════════════════════════════════════════════════════════════════════════════╣");
+                    println!("║ Case Identifier       : {:<62} ║", res.provenance.case_id);
+                    println!("║ Total Artifacts Carved: {:<62} ║", res.provenance.total_artifacts_recovered);
+                    println!("║ Source Hash (SHA-256) : {}... ║", &res.provenance.source_sha256_before[..32]);
+                    println!("║ Read-Only Preservation: {:<62} ║", if res.source_integrity_preserved { "VERIFIED INTACT (Hashes Match)" } else { "INTEGRITY WARNING" });
+                    println!("║ Blockchain Block Hash : {}... ║", &res.blockchain_block_hash[..32]);
+                    println!("║ Provenance Graph JSON : {:<62} ║", res.provenance_manifest_path);
+                    println!("╚════════════════════════════════════════════════════════════════════════════════════════╝\n");
+
+                    println!("Extracted Artifacts & Provenance Offsets:");
+                    for (i, art) in res.provenance.artifacts.iter().enumerate() {
+                        println!(
+                            "  [{}] {:<28} | Confidence: {:>3}% | Offset: 0x{:08X} ({:>7} B) | Status: {}",
+                            i + 1, art.filename, art.confidence_score, art.start_offset, art.length_bytes, art.structural_status
+                        );
+                    }
+                    println!();
+                }
+                Err(e) => eprintln!("\n❌ Carving Error: {}", e),
+            }
         }
         Some(Commands::Autonuke { autonomous, dry_run }) => {
             info!("VeriWipe Autonuke initialized (autonomous={}, dry_run={})", autonomous, dry_run);

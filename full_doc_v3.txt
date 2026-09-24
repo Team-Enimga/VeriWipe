@@ -1,0 +1,410 @@
+P0: INTEGRATED SECURE DATA ERASURE
+& ADVANCED FILE RECOVERY TOOL
+
+P1: Complete Technical, Feasibility & Selection-Pitch Document | Version 3.0
+
+P4: Important positioning note: This document distinguishes the buildable core from advanced research options. Features involving device firmware, proprietary commands, cryptographic proof systems, or reconstruction of destroyed data must be validated on supported hardware and must not be presented as guaranteed capabilities before testing.
+
+P5: 1. Executive Summary
+
+P6: The proposed platform combines three complementary engines under a shared device-access, evidence-management, reporting, and user-interface layer:
+
+P8: The central proposition is not simply that the product offers both erasure and recovery. Its differentiator is a shared, evidence-aware workflow: device-aware sanitization, controlled forensic acquisition, validation of results, and a tamper-evident record linking the operation, its inputs, its limitations, and its outcome.
+
+P9: 1.1 Problem Context
+
+P10: Organizations and investigative teams face two related but opposing needs: data must sometimes be destroyed so that it cannot be recovered, while deleted or damaged data may need to be recovered as evidence. Separate tools can create fragmented workflows, inconsistent records, and extra training and operational overhead. Storage technologies and file systems also behave differently, so a single simplistic deletion or carving method is not sufficient.
+
+P11: 1.2 Goals
+
+P12: Provide a unified interface for drive sanitization, targeted file/folder erasure, and forensic recovery.
+
+P13: Select methods according to device type, interface, and supported capabilities rather than applying one generic overwrite procedure.
+
+P14: Preserve forensic integrity by acquiring and hashing a source image before recovery and operating on a controlled copy.
+
+P15: Make operation outcomes reviewable through structured logs, hashes, reports, and explicit limitations.
+
+P16: Support offline and controlled-environment use, including a bootable live environment for tasks that cannot safely be performed from the host OS.
+
+P17: Build and validate a credible minimum viable product (MVP), then expand through staged research milestones.
+
+P18: 2. Core Differentiators and USPs
+
+P19: 2.1 Self-Checking, Evidence-Linked Workflow
+
+P20: After an erasure, the platform can perform a verification pass appropriate to the device and sanitization method. For supported test media, the recovery engine can additionally scan a defined test region or image for remnants. The report records what was checked, how it was checked, and what the result means.
+
+P21: Pitch wording: “We do not treat a completed command as proof of successful sanitization. We capture the method, device capabilities, verification evidence, and limitations in one auditable workflow.”
+
+P22: Guardrail: A recovery scan that finds no files is not mathematical proof that every physical cell is unrecoverable. Verification strength depends on the device, firmware, sanitize method, and the evidence the device exposes.
+
+P23: 2.2 Bootable Bare-Metal Environment
+
+P24: A custom Linux live environment can operate independently of the installed operating system. This enables whole-drive sanitization of a machine’s boot drive and provides a clean environment for forensic acquisition.
+
+P25: Sanitization mode: boot from removable media, identify internal drives, require explicit device confirmation or a controlled authorization policy, run a supported sanitize method, and save a signed or integrity-protected report to removable media.
+
+P26: Forensic mode: avoid mounting source volumes read-write, acquire a bit-for-bit image where feasible, hash it, and run recovery against the image or a write-protected source.
+
+P27: Offline operation: no cloud dependency is required for core functions. The live environment can include local parsers, recovery code, and locally hosted classification models.
+
+P28: This is a practical differentiator because it solves the host-drive lock problem and reduces reliance on the installed OS. Do not claim that a live USB automatically defeats all malware or guarantees hardware-level access on every device.
+
+P29: 2.3 Device-Aware Sanitization Routing
+
+P30: The erasure engine identifies the device and chooses among supported methods. The design separates method selection from execution so new device backends can be added without rewriting the whole application.
+
+P31: HDD: overwrite-based sanitization where appropriate, with verification sampling and a recorded method.
+
+P32: SATA SSD: use supported ATA sanitize/security erase capabilities when the device and bridge expose them.
+
+P33: NVMe SSD: use supported NVMe sanitize or format/security features according to the device’s reported capabilities.
+
+P34: USB, SD/microSD, eMMC, and other flash media: detect the available interface and use a supported device command if exposed; otherwise clearly report that a full physical sanitization guarantee cannot be made.
+
+P35: Record device identity, capacity, interface, firmware details when available, selected method, command result, timestamps, verification outcome, and exceptions.
+
+P36: Important limitation: USB bridges, controller firmware, bad-block remapping, over-provisioning, and flash translation layers can prevent host software from proving that every physical cell was overwritten. Avoid promising direct control over hidden NAND areas unless a specific vendor/device interface supports it.
+
+P37: 2.4 Forensic Recovery Beyond Simple Signature Matching
+
+P38: Signature-based carving: detect file headers/footers for supported formats even when file-system metadata is absent.
+
+P39: Structure-aware validation: parse internal format structures to reject implausible matches and reduce false positives.
+
+P40: Fragment-aware reconstruction: test candidate fragments and ordering using format-specific constraints; start with a narrow set of formats and expand based on measured results.
+
+P41: Confidence scoring: combine signature strength, structural validity, size plausibility, and other measurable features. Present the score as a triage aid, not as a probability of truth unless calibrated against a test corpus.
+
+P42: Recovery reporting: preserve source-image hash, byte offsets, method, validation checks, confidence indicators, and any uncertainty for each recovered object.
+
+P43: 2.5 Tamper-Evident Audit Trail
+
+P44: Use an append-only, hash-chained event log in which each entry includes the previous entry’s hash. A digital signature can authenticate report origin when signing keys are properly protected. Export human-readable PDF reports and machine-readable JSON records.
+
+P45: The hash chain makes undetected modification harder to conceal, but it does not by itself prove that the original event was truthful or that the signing key was not compromised. Key custody, trusted timestamps, operator authentication, and audit procedures remain important.
+
+P46: Blockchain positioning: a local hash chain is a lightweight, practical implementation of tamper-evident logging. External anchoring to a permissioned ledger may be an optional extension, not a dependency for offline use.
+
+P47: 2.6 Offline AI-Assisted Triage
+
+P48: A locally hosted classifier or compact language model can help sort recovered material and extract searchable indicators from text-based files without sending evidence to a cloud service.
+
+P49: Potential tasks: document-type classification, named-entity extraction, keyword/indicator flagging, duplicate grouping, and investigator-defined search.
+
+P50: The model should run offline, record its model/version and processing settings, and retain links to the source artifact and byte offsets.
+
+P51: AI output is a lead for human review, not a factual finding. Sensitive categories and terms should be configurable by the authorized investigator.
+
+P52: Pitch wording: “Local AI reduces the time spent triaging large recovery sets while keeping evidence inside the controlled environment.”
+
+P53: 3. Module 1: Secure Drive Eraser
+
+P54: 3.1 Functional Components
+
+P55: Device detection and fingerprinting: enumerate HDD, SATA SSD, NVMe SSD, USB flash, SD/microSD, and supported eMMC devices; report interface, capacity, serial/firmware information when available, and relevant capability flags.
+
+P56: Method selector: choose a device-appropriate method based on reported support and policy. Explain why a method is selected and identify unsupported cases.
+
+P57: Raw/device command backend: isolate Linux and Windows implementations behind a common interface. Use privileged device APIs only after strict target validation.
+
+P58: Hidden-area awareness: detect reported HPA/DCO or capacity discrepancies where supported. Report the finding and provide safe, documented handling rather than assuming every hidden region can be erased.
+
+P59: Verification engine: sample relevant sectors or query device sanitize status as applicable; compare observed results with the method’s expected behavior and record the scope of verification.
+
+P60: Audit and certificate generation: record target identity, authorization, method, start/end time, command status, verification evidence, exceptions, and operator identity.
+
+P61: 3.2 Standards and Policy Mapping
+
+P62: The project document identifies NIST SP 800-88 Rev. 1, DoD 5220.22-M, IEEE 2883-2022, and ISO/IEC 27040 as reference frameworks. The implementation should map each supported operation to the applicable policy and version after technical review. Legacy methods or standards should be described as legacy where appropriate, rather than presented as universally current requirements.
+
+P63: 3.3 Research Extensions, Not MVP Guarantees
+
+P64: Over-provisioning and remapped-block handling: investigate vendor-supported sanitize behavior and documented device interfaces. Do not claim a generic command can directly wipe every hidden NAND block or G-list entry.
+
+P65: SSD garbage collection/FTL behavior: TRIM/deallocate and controller sanitize semantics vary. Treat “forcing garbage collection” as an experiment, not a reliable universal sanitization mechanism.
+
+P66: HPA/DCO handling: limit to supported ATA devices and test carefully. Preserve original configuration information and make changes explicit.
+
+P67: RPMB/eMMC/UFS: investigate only with authorized hardware, vendor documentation, and a clear read/write capability boundary. RPMB is authenticated and is not a generic area from which software can simply extract encryption keys.
+
+P68: 4. Module 2: Secure File & Folder Eraser
+
+P69: 4.1 Functional Components
+
+P70: Selective deletion workflow with a manifest of selected files/folders, target path, method, result, and timestamp.
+
+P71: Filesystem-aware handling for supported formats such as NTFS, ext4, exFAT, and FAT32, with capability-specific behavior.
+
+P72: Where supported, attempt to address file data blocks before unlinking; report when journaling, copy-on-write, SSD remapping, snapshots, or permissions make this unreliable.
+
+P73: Inspect relevant metadata and OS artifacts, such as NTFS records/alternate data streams, filesystem journals, slack space, thumbnail caches, recent-file lists, shell histories, and embedded EXIF/document properties, only within the authorized scope.
+
+P74: Batch and resume-safe processing, with explicit status for completed, failed, skipped, or uncertain items.
+
+P75: Post-operation verification and shared audit reporting.
+
+P76: 4.2 Safety and Accuracy Boundaries
+
+P77: Selective file wiping is not equivalent to whole-device sanitization. Modern SSDs, copy-on-write file systems, snapshots, journaling, backups, cloud sync, and application caches can retain copies outside the target’s current logical blocks. The UI and report must distinguish “file removed,” “logical blocks processed,” and “device sanitization completed.” Metadata cleanup can also affect unrelated user activity, so it requires explicit scope and authorization.
+
+P78: 5. Module 3: Advanced File Carving & Recovery
+
+P79: 5.1 Required Workflow
+
+P80: Acquire a bit-for-bit image where feasible and calculate a cryptographic hash immediately.
+
+P81: Preserve the source as read-only and conduct recovery on the verified image or a controlled working copy.
+
+P82: Run signature-based scanning, then structure-aware validation for supported file formats.
+
+P83: Attempt fragment reconstruction only for supported formats and record the method and assumptions.
+
+P84: Classify and score candidates, then export recovered files with offsets, hashes, validation results, and a case-level report.
+
+P85: 5.2 Recovery Techniques
+
+P86: Signature-based carving: configurable signature database for formats such as JPEG, PNG, PDF, ZIP/Office, and MP4.
+
+P87: Structure-aware carving: use format-specific parsing, such as PDF end markers and cross-reference structures, ZIP central directory information, and JPEG segment/table checks.
+
+P88: Metadata-independent recovery: scan raw sectors when the file system is formatted, corrupted, or unavailable.
+
+P89: Bifragment gap carving: for selected formats, test plausible gaps between known fragments and validate candidates using format structure or checksums where available.
+
+P90: Multi-fragment reconstruction: later-stage research using fragment ordering heuristics, byte-frequency patterns, and format-specific continuation cues.
+
+P91: Confidence scoring: combine header/footer matches, parser validation, size constraints, entropy features, and other measurable indicators. Calibrate against known test data and expose the score’s meaning.
+
+P92: 5.3 Advanced Research Concepts and Guardrails
+
+P93: Entropy-gradient mapping: visualize regions with unusual entropy and flag possible encrypted or compressed containers for analyst review. High entropy alone does not establish steganography, malicious intent, or the presence of a covert container.
+
+P94: Byte-level generative reconstruction/inpainting: explore as an optional research feature for producing a clearly labeled best-effort derivative. Never represent predicted bytes as recovered evidence. Preserve the original carved bytes and maintain a provenance record showing all model-generated changes.
+
+P95: Volatile-memory and hibernation artifacts: pagefile, swap, and hibernation analysis can be useful, but these are not substitutes for live-memory acquisition. Do not claim reliable extraction of encryption keys or passwords from these files without validated, format-specific methods and authorization.
+
+P96: Local AI triage: use for search and prioritization, with analyst review and reproducible settings.
+
+P97: 5.4 Reference Tools to Study
+
+P98: The initial document identifies The Sleuth Kit/Autopsy, PhotoRec, Scalpel/Foremost, and bulk_extractor as references for studying techniques and validating results. Use them as comparative tools and test baselines, while documenting which functions are implemented by the project itself.
+
+P99: 6. Shared Platform Architecture
+
+P101: 6.1 Suggested Technology Choices
+
+P102: Core I/O and performance-sensitive routines: C/C++ or Rust.
+
+P103: OS abstraction: separate Linux and Windows device backends behind a common interface.
+
+P104: Filesystem parsing: study and selectively integrate The Sleuth Kit libraries for read-side parsing, while keeping project-specific sanitization logic separate.
+
+P105: Orchestration/reporting: Python or Rust service layer.
+
+P106: UI: Qt/PyQt for a native application, or a lightweight React interface with a local backend.
+
+P107: Live environment: a minimal Linux image built with a suitable live-build framework, with the required drivers and tools included.
+
+P108: ML: begin with interpretable feature-based scoring; add a local model only when a labeled evaluation set demonstrates measurable value.
+
+P109: 7. Feasibility, Scalability, Reliability, and Flexibility
+
+P110: 7.1 Feasibility: Build in Layers
+
+P112: 7.2 Scalability
+
+P113: Chunk-based scanning supports bounded memory use and enables parallel processing across independent ranges, subject to I/O limits and correct boundary overlap.
+
+P114: A modular signature/format registry allows additional file formats to be added without rewriting the scanner.
+
+P115: Case-based manifests and resumable jobs support large investigations and batch asset workflows.
+
+P116: Performance should be reported as measured throughput and recovery precision/recall on defined image sizes and hardware. Avoid promising linear speedup or a specific GB/min figure before benchmarking.
+
+P117: 7.3 Reliability
+
+P118: Use explicit state machines for destructive operations, safe failure defaults, cancellation rules, and clear recovery behavior after interruption.
+
+P119: Separate device discovery from target authorization. Require a deliberate confirmation step before destructive actions and display model, serial, and capacity when available.
+
+P120: Use test images with known contents, reproducible hardware test cases, independent tools, and regression tests.
+
+P121: Record unsupported commands, bridge limitations, I/O errors, and uncertain outcomes rather than silently reporting success.
+
+P122: 7.4 Flexibility
+
+P123: OS-specific device backends are isolated behind a common interface.
+
+P124: Filesystem parsers, file signatures, validators, and scoring features are modular.
+
+P125: Offline deployment supports restricted laboratories and field environments; optional external integrations remain disabled by default.
+
+P126: The same case/report model is shared across erasure and recovery, while destructive and reconstructive workflows remain strictly separated.
+
+P127: 8. Government Value and Adoption Case
+
+P129: The government-facing value proposition should be framed as reduced workflow fragmentation, stronger documentation, controlled offline operation, and measurable improvements demonstrated in testing. Do not claim guaranteed court admissibility, universal recovery, or absolute irrecoverability. Those depend on legal procedures, device behavior, method validation, and the specific evidence collected.
+
+P130: 9. High-Risk or Speculative Ideas: Honest Treatment
+
+P132: 10. Validation and Testing Plan
+
+P133: Erasure efficacy: test HDD, SATA SSD, NVMe SSD, and supported removable media separately. Record exact models, firmware, interface/bridge, selected method, device response, and verification scope.
+
+P134: Independent verification: compare results with suitable independent forensic tools and controlled known-data test cases.
+
+P135: Recovery accuracy: construct images containing known deleted files, fragmented files, corrupted structures, and negative examples. Measure precision, recall, false-positive rate, and reconstruction success by format.
+
+P136: Evidence integrity: confirm source image hashes before and after analysis; test that recovery workflows do not write to source media.
+
+P137: Audit integrity: alter, reorder, omit, and corrupt test log entries to confirm that chain validation detects tampering; test signing-key handling separately.
+
+P138: Robustness: simulate power loss, process termination, I/O errors, full report media, and unsupported device commands.
+
+P139: Performance: benchmark representative 32 GB, 256 GB, and 1 TB images where available, reporting hardware, scan configuration, throughput, and memory use.
+
+P140: Human factors: test whether operators can distinguish source and destination drives, understand method limitations, and avoid unintended destructive actions.
+
+P141: Compliance mapping: maintain a reviewed mapping from implemented methods to the standards and policy versions actually claimed.
+
+P142: 11. Recommended SIH Government PPT Flow
+
+P144: 11.1 Pitch Discipline
+
+P145: Lead with the operational problem and measurable value, not a long list of exotic algorithms.
+
+P146: Separate “implemented,” “prototype,” “planned,” and “research” features on the slides.
+
+P147: Never claim 100% recovery, guaranteed court admissibility, universal device support, or mathematical proof of physical erasure without evidence.
+
+P148: Use one memorable architecture graphic and one clear validation graphic instead of dense paragraphs.
+
+P149: State what the team can demonstrate during selection and what requires future hardware access or research.
+
+P150: Make the judges believe the team understands the hard limits, not merely the ambitious possibilities.
+
+P151: 12. Implementation Roadmap
+
+P153: 13. Suggested One-Minute Pitch
+
+P154: “Our solution brings secure data sanitization and forensic recovery into one evidence-aware platform. It selects supported erase methods based on the storage device, provides a bootable environment for whole-drive operations, and preserves recovery evidence through read-only imaging and hashing. Instead of relying on a success message, it records verification results and limitations in a tamper-evident audit trail. Its recovery pipeline moves from signatures to structure validation and carefully scoped fragment reconstruction, while optional offline triage helps investigators prioritize results without uploading sensitive data. We are building this in stages, starting with demonstrable workflows and a controlled test matrix, then expanding device and format coverage based on measured results. The goal is a practical, auditable platform that reduces tool fragmentation while respecting the technical limits of storage devices and forensic evidence.”
+
+P155: 14. Deliverables Checklist
+
+P156: ☐ Secure Drive Eraser module with supported-device matrix and verification report.
+
+P157: ☐ Secure File & Folder Eraser module with scope controls, manifests, and limitations reporting.
+
+P158: ☐ Advanced File Carving & Recovery module with signature and structure validation.
+
+P159: ☐ Forensic imaging and source-integrity workflow.
+
+P160: ☐ Shared reporting and audit management system with hash-chain validation and optional signatures.
+
+P161: ☐ User interface/dashboard and bootable live environment.
+
+P162: ☐ Validation datasets, test scripts, accuracy and performance results.
+
+P163: ☐ Standards/policy mapping reviewed against the versions actually implemented.
+
+P164: ☐ User manual, technical architecture, API/module interfaces, and deployment guide.
+
+P165: ☐ Known limitations, unsupported hardware list, and operational safety documentation.
+
+P166: Appendix A. Claims That Need Evidence Before the PPT
+
+P168: Appendix B. Original Concept Coverage
+
+P169: This version consolidates the supplied problem background and expected solution, the three-module technical plan, the proposed live-USB modes, self-validation, device-aware erase routing, HPA/DCO awareness, SSD over-provisioning and defect-management research, RPMB research, entropy mapping, bifragment and multi-fragment carving, local AI/NER, confidence scoring, byte-level generative reconstruction, volatile-artifact analysis, hash-chained audit logs, optional ZK proof ideas, field-trigger/panic-wipe concept, cross-platform abstraction, standards mapping, reference tools, validation strategy, and the suggested government selection-presentation narrative. Risky or unverified concepts are retained as research directions with explicit caveats rather than represented as established capabilities.
+
+
+--- TABLE 0 ---
+Project Detail | Value
+Problem Statement ID | 26149
+Organization | National Technical Research Organisation (NTRO)
+Theme | Blockchain & Cybersecurity
+Solution concept | One platform for secure sanitization, targeted erasure, forensic recovery, and verifiable reporting
+Document purpose | Technical blueprint plus government-facing selection-round narrative
+
+--- TABLE 1 ---
+Module | Purpose | Operating direction
+Secure Drive Eraser | Sanitize supported physical storage devices, verify the operation, and produce an audit record. | Destructive
+Secure File & Folder Eraser | Selectively erase files/folders and address associated metadata or residual traces where technically possible. | Destructive, targeted
+Advanced File Carving & Recovery | Recover deleted or lost data from images and damaged/formatted media while preserving evidence. | Reconstructive
+
+--- TABLE 2 ---
+Layer | Responsibility
+Device abstraction | Common operations such as enumerate, inspect capabilities, read sectors, issue supported sanitize commands, and return structured status.
+Acquisition and evidence layer | Image creation, hashing, read-only workflow, source/working-copy separation, case metadata.
+Core engines | Drive erasure, targeted erasure, carving, validation, reconstruction, and classification.
+Policy and authorization | Explicit target selection, destructive-action confirmation, role permissions, case scope, and safety interlocks.
+Audit/reporting | Append-only hash chain, optional digital signatures, PDF/JSON export, validation records, error handling.
+Orchestration/UI | Device view, module selection, progress, event stream, case management, report viewer, and operator prompts.
+Offline intelligence layer | Optional local classification/NER and investigator-configured triage, with model/version provenance.
+
+--- TABLE 3 ---
+Stage | Deliverable | Proof point
+MVP 1 | Read-only imaging, SHA-256 hashing, signature carving for a few formats, and basic reports. | Recover known deleted files from controlled images without modifying the source.
+MVP 2 | HDD overwrite workflow, target confirmation, audit chain, and verification sampling. | Document outcomes across repeatable HDD test cases.
+MVP 3 | Live USB with forensic mode and a guarded erasure mode. | Boot a test machine independently of its installed OS and preserve report output.
+MVP 4 | One filesystem-specific targeted erasure prototype and structure-aware validators. | Report exact scope, limitations, and pass/fail results.
+Stretch | NVMe/SATA sanitize routing, fragment reconstruction, calibrated confidence scoring, local AI triage, signed reports. | Hardware-specific test matrix and measured evaluation.
+Research | Vendor-specific flash handling, advanced reconstruction, optional cryptographic proof extensions. | Independent review, documented assumptions, and narrow supported-device claims.
+
+--- TABLE 4 ---
+Operational need | Platform contribution
+Controlled data disposal | Device-aware method selection, verification evidence, and standardized reports.
+Forensic evidence preservation | Read-only acquisition workflow, source hashing, and artifact provenance.
+Reduced tool fragmentation | One operator environment and shared case/audit model across erasure and recovery.
+Restricted networks | Core workflow designed for offline use without cloud processing.
+Audit and accountability | Hash-chained records, optional signatures, structured exports, and explicit operation history.
+Operational throughput | Batch processing, resumable jobs, triage aids, and repeatable workflows.
+Long-term extensibility | Modular device backends, filesystem support, carving validators, and optional research modules.
+
+--- TABLE 5 ---
+Idea discussed | Potential value | How to present it responsibly
+Zero-knowledge proofs for audit | Could disclose compliance facts while hiding selected operational metadata. | Research extension. A hash chain and signed report are the realistic initial deliverable; ZK circuits, trusted inputs, and audit semantics require specialist design.
+Panic wipe via external hardware trigger | Rapid response concept for narrowly defined field scenarios. | Do not make this a default feature or claim “uninterruptible” execution. It risks accidental destruction and can conflict with evidence-preservation duties. If explored, require explicit authorization, policy controls, and safety review.
+RPMB interrogation/rotation | Potentially relevant to specialized embedded storage workflows. | Highly device- and authentication-dependent. Do not claim key extraction or generic secure bricking. Keep outside the MVP pending hardware access and vendor/Jedec-level validation.
+Direct OP/G-list wiping | Addresses the gap between logical address space and physical flash management. | Not generally available through standard host interfaces. Present only as vendor-specific research, not a universal capability.
+Generative byte inpainting | May help analysts inspect damaged media derivatives. | Predicted bytes are synthetic and must never be confused with recovered evidence. Label and preserve provenance.
+Entropy mapping | Can prioritize unusual regions for review. | Entropy is a clue, not proof of encryption, steganography, or adversarial concealment.
+Automatic SSD garbage-collection forcing | Could be investigated as a device behavior experiment. | Do not present as a reliable sanitize method. Prefer supported sanitize commands and report device limitations.
+
+--- TABLE 6 ---
+Slide | Headline | Content to show
+1 | One platform. Two critical outcomes. | Problem statement, three modules, one-sentence value proposition.
+2 | Why current workflows are fragmented | Separate erasure/recovery tools, device diversity, evidence and reporting gaps.
+3 | Our core differentiator: evidence-linked operations | Shared case model, source hashing, method selection, verification, tamper-evident reporting.
+4 | Bare-metal live environment | Simple diagram: boot USB → RAM/live OS → identify target → erase or image → report.
+5 | Device-aware sanitization | HDD/SATA/NVMe/removable-media decision tree and honest support boundaries.
+6 | Recovery that validates, not just matches signatures | Pipeline: raw scan → format parser → fragment logic → confidence/triage → analyst review.
+7 | Offline AI and entropy-assisted triage | Show as optional analyst-assistance functions, with human verification and no cloud dependency.
+8 | Tamper-evident chain of custody | Visual hash-chain: Entry 1 hash → Entry 2 includes previous hash → signed report; explain limitations.
+9 | Feasible build plan | MVP milestones, what is already buildable, what is stretch/research, and team ownership.
+10 | How we will prove it works | Test matrix, independent comparison, accuracy/false-positive metrics, throughput, and integrity tests.
+11 | Government adoption value | Offline deployment, auditability, reduced tool fragmentation, repeatable procedures, extensibility.
+12 | What selection enables | Pilot scope, supported devices/formats, validation partnership, and staged expansion.
+
+--- TABLE 7 ---
+Phase | Focus | Exit criteria
+0. Scope and threat model | Define supported devices/formats, authorization model, destructive-action safety, and evidence handling. | Approved scope and test plan.
+1. Shared foundations | Device abstraction skeleton, case model, hash-chained log, CLI, and report schema. | Reproducible case and valid log verification.
+2. Recovery MVP | Image acquisition, hashing, signature carving, basic structure checks. | Known-file test corpus results and source-integrity evidence.
+3. Erasure MVP | HDD workflow and supported device detection, verification sampling, safety interlocks. | Repeatable test-drive results with explicit limitations.
+4. Live USB | Forensic mode first, then guarded sanitization mode and report export. | Boot and operate on a dedicated test system.
+5. Advanced recovery | Fragment reconstruction, confidence scoring, selected format validators. | Measured improvements against baseline tests.
+6. Extensions | NVMe/SATA sanitize paths, offline AI triage, selected filesystem cleanup, optional signatures. | Feature-specific validation and documented compatibility.
+7. Research track | Vendor-specific flash handling, ZK proof design, advanced byte reconstruction. | Independent technical review before claims or deployment.
+
+--- TABLE 8 ---
+Claim | Evidence needed before stating it as achieved
+“Erasure is unrecoverable” | Defined device/method scope, manufacturer behavior, verification procedure, independent test results, and precise wording.
+“Works on all SSDs” | Compatibility matrix across controllers, interfaces, bridges, and firmware versions. Prefer supported-device language.
+“Court-admissible” | Legal/procedural review, chain-of-custody design, validated acquisition process, and jurisdiction-specific requirements. Say “designed to support evidential integrity” until established.
+“AI detects hidden intelligence” | Labeled evaluation set, precision/recall, false-positive analysis, model provenance, and analyst workflow.
+“Fragment recovery outperforms existing tools” | Repeatable benchmark corpus, baseline tools, consistent parameters, and format-specific metrics.
+“Tamper-proof blockchain” | Use “tamper-evident hash-chained log” unless a separately reviewed ledger and threat model justify stronger wording.
+“Panic wipe is uninterruptible” | Avoid this claim. Device command behavior, firmware, power state, and failure modes prevent a universal guarantee.
